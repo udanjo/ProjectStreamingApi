@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using ProjectStreamingApi.Application.Models;
+using ProjectStreamingApi.Hubs;
 using ProjectStreamingApi.Results;
 using System.Collections.Concurrent;
 using System.Text.Json;
@@ -12,6 +14,12 @@ namespace ProjectStreamingApi.Controllers
     {
         private static ConcurrentBag<StreamWriter> _clients = new ConcurrentBag<StreamWriter>();
         private static List<ItemModel> _itens = new List<ItemModel>();
+        private readonly IHubContext<StreamingHub> _streaming;
+
+        public TodoController(IHubContext<StreamingHub> streaming)
+        {
+            _streaming = streaming;
+        }
 
         [HttpGet]
         public ActionResult<List<ItemModel>> Get() => _itens;
@@ -68,9 +76,12 @@ namespace ProjectStreamingApi.Controllers
 
         private async Task WriteOnStream(ItemModel data, string action)
         {
+            string jsonData = string.Format("{0}\n", JsonSerializer.Serialize(new { data, action }));
+
+            await _streaming.Clients.All.SendAsync("ReceiveMessage", jsonData);
+
             foreach (var client in _clients)
             {
-                string jsonData = string.Format("{0}\n", JsonSerializer.Serialize(new { data, action }));
                 await client.WriteAsync(jsonData);
                 await client.FlushAsync();
             }
